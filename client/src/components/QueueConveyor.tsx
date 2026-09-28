@@ -280,6 +280,17 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                 <span>Queue Pipeline (FIFO: #1 Head → #{totalMessages} Tail)</span>
               </div>
 
+                {/* Left message-navigation arrow */}
+                <button
+                  type="button"
+                  onClick={handlePrev}
+                  disabled={messages.length === 0}
+                  className="shrink-0 w-7 h-20 flex items-center justify-center border border-zinc-800 bg-[#0b0d12] text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-30 cursor-pointer"
+                  title="Previous message (←)"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+
                 {slots.map((item) => {
                   if (item.type === 'placeholder') {
                     const { index } = item;
@@ -390,13 +401,17 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                   );
                 })}
 
-                {/* Remaining messages past this page: jump to the next batch */}
+                {/* Remaining messages past this page: open the inspector on the next batch */}
                 {remaining > 0 && (
                   <button
                     type="button"
-                    onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                    onClick={() => {
+                      const target = Math.min(pageEnd, Math.max(0, messages.length - 1));
+                      onSelectMessage(target);
+                      onOpenModal(target);
+                    }}
                     className="shrink-0 flex flex-col items-center justify-between p-1.5 w-16 h-20 bg-[#080a10] border border-dashed border-zinc-700/80 hover:border-zinc-400 hover:bg-[#0f121a] transition-all cursor-pointer font-mono group"
-                    title={`${remaining} more message${remaining === 1 ? '' : 's'} — go to the next page`}
+                    title={`Open the remaining ${remaining} message${remaining === 1 ? '' : 's'} in the inspector`}
                   >
                     <span className="text-zinc-400 group-hover:text-white font-bold tracking-widest text-xs">···</span>
                     <div className="flex flex-col items-center">
@@ -407,10 +422,21 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                       className="text-[8px] uppercase tracking-wider font-semibold group-hover:underline"
                       style={{ color: accentColor }}
                     >
-                      NEXT ↗
+                      INSPECT ↗
                     </span>
                   </button>
                 )}
+
+                {/* Right message-navigation arrow */}
+                <button
+                  type="button"
+                  onClick={handleNext}
+                  disabled={messages.length === 0}
+                  className="shrink-0 w-7 h-20 flex items-center justify-center border border-zinc-800 bg-[#0b0d12] text-zinc-400 hover:text-white hover:border-zinc-500 transition-colors disabled:opacity-30 cursor-pointer"
+                  title="Next message (→)"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
               </div>
 
               {/* Delivery Arrow */}

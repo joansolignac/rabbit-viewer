@@ -39,7 +39,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
 export async function testConnection(profile: ConnectionProfile) {
   const res = await fetch(`${API_BASE}/test-connection`, {
     method: 'POST',
-    headers: buildHeaders(profile, { 'Content-Type': 'application/json' }),
+    headers: buildHeaders(profile),
   });
   return handleResponse<{
     connected: boolean;

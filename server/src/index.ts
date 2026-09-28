@@ -262,6 +262,26 @@ app.get('*', (req: Request, res: Response, next: NextFunction) => {
   });
 });
 
+// Error-handling middleware
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  if (err instanceof SyntaxError && (err as any).status === 400 && 'body' in err) {
+    return res.status(400).json({ error: 'Malformed JSON in request body' });
+  }
+  console.error('[rabbit-viewer-proxy] Server error:', err);
+  if (res.headersSent) {
+    return next(err);
+  }
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[rabbit-viewer-proxy] Uncaught exception:', err);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('[rabbit-viewer-proxy] Unhandled rejection:', reason);
+});
+
 app.listen(PORT, () => {
   console.log(`[rabbit-viewer-proxy] Server listening on http://localhost:${PORT}`);
 });

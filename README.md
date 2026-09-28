@@ -75,7 +75,9 @@ as per-request headers to the local proxy.
 3. **Paginated FIFO pipeline viewer**
    - The queue is rendered as an assembly line in **pages of 6 messages** (`#1…#6`, `#7…#12`, …) with a compact
      pagination control (first / prev / numbered pages / next / last) and a `Showing #A–#B of #N` indicator.
-   - Each page ends with a **`+N` chip** that jumps to the next batch, so you can walk the whole backlog.
+   - Each page ends with a **`+N` chip** that opens the inspector on the next batch.
+   - **◀ ▶ arrows** flank the pipeline to move to the previous/next message; the page follows the selection
+     automatically, and clicking any message card (or the `+N` chip) opens the full message inspector.
    - Messages that have not been peeked yet (the Management API only peeks from the **head**, capped at **500** per
      request) still appear as **placeholders at their real queue positions**, so the numbering and the tail always
      match the real queue.
