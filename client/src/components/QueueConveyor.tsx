@@ -32,7 +32,8 @@ function formatRate(value?: number): string {
 
 type ConveyorSlotItem =
   | { type: 'message'; message: QueueMessage; index: number }
-  | { type: 'ellipsis'; fromIndex: number; toIndex: number; count: number };
+  | { type: 'ellipsis'; fromIndex: number; toIndex: number; count: number }
+  | { type: 'placeholder'; index: number };
 
 export const QueueConveyor: React.FC<QueueConveyorProps> = ({
   queue,
@@ -81,22 +82,25 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
   // Conveyor layout: HEAD of the queue, a single collapsed overflow chip, then
   // the final messages. The overflow chip absorbs every message that is not
   // rendered — both collapsed peeked messages and messages still waiting in the
-  // broker — so there is only ever one overflow counter on screen.
+  // broker — so there is only ever one overflow counter on screen. The two tail
+  // slots always represent the REAL end of the queue: when the whole backlog
+  // has not been peeked (peek cap), they render as placeholders instead of
+  // pretending the last peeked message is the tail.
   const HEAD_SLOTS = 5;
   const TAIL_SLOTS = 2;
   const COLLAPSE_THRESHOLD = HEAD_SLOTS + TAIL_SLOTS + 1;
 
   const buildSlots = (): ConveyorSlotItem[] => {
     const buffer = messages.length;
+    const tailLoaded = buffer >= totalMessages;
 
     // Queue is short enough to render every peeked message: nothing to collapse.
-    if (totalMessages <= COLLAPSE_THRESHOLD) {
+    if (tailLoaded && totalMessages <= COLLAPSE_THRESHOLD) {
       return messages.map((m, i) => ({ type: 'message', message: m, index: i }));
     }
 
-    // Never let the head block eat into the tail slots we want to keep visible.
-    const headCount = Math.min(HEAD_SLOTS, Math.max(0, buffer - TAIL_SLOTS));
-    const tailStart = Math.max(headCount, buffer - TAIL_SLOTS);
+    // Show at most HEAD_SLOTS from the head and never overlap the real tail.
+    const headCount = Math.min(HEAD_SLOTS, Math.max(0, tailLoaded ? totalMessages - TAIL_SLOTS : buffer));
 
     const slots: ConveyorSlotItem[] = [];
     for (let i = 0; i < headCount; i++) {
@@ -105,19 +109,24 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
 
     // Single overflow chip: every message not shown, including the ones that
     // have not been peeked yet.
-    const overflow = Math.max(0, totalMessages - headCount - (buffer - tailStart));
+    const overflow = Math.max(0, totalMessages - headCount - TAIL_SLOTS);
     if (overflow > 0) {
       slots.push({
         type: 'ellipsis',
         fromIndex: headCount,
-        toIndex: Math.max(headCount, tailStart - 1),
+        toIndex: Math.max(headCount, (tailLoaded ? totalMessages : buffer) - TAIL_SLOTS - 1),
         count: overflow,
       });
     }
 
-    // Final messages of the queue (the last peeked slots).
-    for (let i = tailStart; i < buffer; i++) {
-      slots.push({ type: 'message', message: messages[i], index: i });
+    // Real tail of the queue (absolute positions totalMessages - 2 and - 1).
+    const tailStart = totalMessages - TAIL_SLOTS;
+    for (let i = Math.max(0, tailStart); i < totalMessages; i++) {
+      if (i < buffer) {
+        slots.push({ type: 'message', message: messages[i], index: i });
+      } else {
+        slots.push({ type: 'placeholder', index: i });
+      }
     }
 
     return slots;
@@ -265,9 +274,35 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                     );
                   }
 
+                  if (item.type === 'placeholder') {
+                    const { index } = item;
+                    const isTail = index === totalMessages - 1;
+                    return (
+                      <div key={`placeholder-${index}`} className="flex flex-col items-center relative">
+                        <div
+                          title={`Message #${index + 1} is outside the loaded peek window (currently #1–#${Math.min(messages.length, totalMessages)} loaded). The capture is head-only, so the real tail cannot be inspected non-destructively.`}
+                          className="shrink-0 w-16 h-20 p-1.5 border border-dashed border-zinc-700/70 bg-[#0b0c11] flex flex-col justify-between items-center text-zinc-600 select-none"
+                        >
+                          <div className="w-full flex items-center justify-between text-[9px] font-mono leading-none">
+                            <span className="font-bold text-zinc-500">#{index + 1}</span>
+                            {isTail && (
+                              <span className="px-1 py-0.2 bg-zinc-800/80 text-zinc-500 font-bold text-[8px]">TAIL</span>
+                            )}
+                          </div>
+                          <div className="my-auto flex items-center justify-center">
+                            <Inbox className="size-3.5" />
+                          </div>
+                          <div className="w-full text-center font-mono text-[8px] uppercase tracking-tight">
+                            not peeked
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   const { message, index } = item;
                   const isHead = index === 0;
-                  const isTail = index === messages.length - 1;
+                  const isTail = index === totalMessages - 1;
                   const isSelected = selectedIndex === index;
 
                   return (

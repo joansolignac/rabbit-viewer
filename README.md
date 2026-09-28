@@ -77,6 +77,9 @@ as per-request headers to the local proxy.
      the **last 2 messages** — e.g. `#1 #2 #3 #4 #5 [+14] #20 #21` for a 21-message queue. The `+N` chip absorbs
      everything that is not rendered, including messages that have not been peeked yet, so there is never a second
      overflow counter on screen.
+   - The two tail slots always use the **real queue positions**: when the backlog exceeds the loaded peek window
+     they render as placeholders (e.g. `#197 #198`) instead of pretending the last peeked message is the tail. The
+     RabbitMQ Management API only peeks from the head, so an unpeeked tail cannot be inspected non-destructively.
    - Per-message payload with JSON syntax highlighting, raw/formatted toggle, and one-click copy.
    - Redelivery indicator: `[ ⚠ REDELIVERED ]`.
    - Routing key, exchange, delivery mode, byte size, `correlation_id`, and `reply_to` (invaluable for debugging
