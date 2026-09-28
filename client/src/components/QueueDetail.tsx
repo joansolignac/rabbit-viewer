@@ -41,7 +41,11 @@ export const QueueDetail: React.FC<QueueDetailProps> = ({
   const [modalMessageIndex, setModalMessageIndex] = useState<number | null>(null);
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [peekCount, setPeekCount] = useState(10);
+  // Default to the maximum peek so the conveyor always covers the whole ready
+  // backlog instead of only the first 10 messages. The broker returns at most
+  // as many messages as the queue actually holds, so this shows the real queue.
+  const MAX_PEEK_COUNT = 100;
+  const [peekCount, setPeekCount] = useState(MAX_PEEK_COUNT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
 
@@ -220,7 +224,7 @@ export const QueueDetail: React.FC<QueueDetailProps> = ({
           </div>
           <div className="shrink-0 flex items-center gap-2">
             <button
-              onClick={() => handlePeekMessages(10)}
+              onClick={() => handlePeekMessages(peekCount)}
               className="hw-btn-primary !bg-rose-500 hover:!bg-rose-400 !text-black !py-1.5 !px-3 !text-[11px]"
             >
               <Eye className="size-3.5" />
@@ -335,7 +339,7 @@ export const QueueDetail: React.FC<QueueDetailProps> = ({
               <option value={10}>10 msgs</option>
               <option value={20}>20 msgs</option>
               <option value={50}>50 msgs</option>
-              <option value={100}>100 msgs</option>
+              <option value={100}>All (max 100)</option>
             </select>
           </div>
 

@@ -84,6 +84,8 @@ as per-request headers to the local proxy.
    - Expandable table of custom headers.
 4. **Safe and destructive operations behind confirmation**
    - **Peek messages** using `ackmode: "ack_requeue_true"` to inspect exact contents **without consuming them**.
+     By default the whole ready backlog is peeked (up to 100 messages), so the conveyor reflects the real queue
+     instead of only the first 10 messages. The peek count can be lowered or raised from the **Peek Count** selector.
    - **Ack / drop head message** to consume and delete the front message after explicit confirmation.
    - **Purge entire queue** behind a typed `PURGE` confirmation.
 5. **Configurable auto-refresh**
