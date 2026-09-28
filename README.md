@@ -11,7 +11,7 @@
 
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" />
-  <img alt="Node.js >= 20.19" src="https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg" />
+  <img alt="Node.js 20.19+" src="https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg" />
   <img alt="RabbitMQ" src="https://img.shields.io/badge/RabbitMQ-3.x-ea580c.svg" />
   <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-blue.svg" />
 </p>
