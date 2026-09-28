@@ -47,7 +47,9 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
   const deliverRate = queue.message_stats?.deliver_get_details?.rate ?? 0;
   const ackRate = queue.message_stats?.ack_details?.rate ?? 0;
 
-  const notPeeked = Math.max(0, queue.messages_ready - messages.length);
+  // Total messages the queue actually holds. The peeked buffer can be smaller
+  // than the queue, so this is the reference for the collapsed overflow chip.
+  const totalMessages = Math.max(queue.messages_ready, messages.length);
   const isEmpty = queue.messages_ready === 0 && queue.messages_unacknowledged === 0;
   const consumersDown = isStuck || queue.consumers === 0;
 
@@ -76,31 +78,47 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
     );
   };
 
-  // Show exactly 6 messages ... and 2 final messages
+  // Conveyor layout: HEAD of the queue, a single collapsed overflow chip, then
+  // the final messages. The overflow chip absorbs every message that is not
+  // rendered — both collapsed peeked messages and messages still waiting in the
+  // broker — so there is only ever one overflow counter on screen.
+  const HEAD_SLOTS = 5;
+  const TAIL_SLOTS = 2;
+  const COLLAPSE_THRESHOLD = HEAD_SLOTS + TAIL_SLOTS + 1;
+
   const buildSlots = (): ConveyorSlotItem[] => {
-    const total = messages.length;
-    if (total <= 8) {
+    const buffer = messages.length;
+
+    // Queue is short enough to render every peeked message: nothing to collapse.
+    if (totalMessages <= COLLAPSE_THRESHOLD) {
       return messages.map((m, i) => ({ type: 'message', message: m, index: i }));
     }
 
-    const slots: ConveyorSlotItem[] = [];
+    // Never let the head block eat into the tail slots we want to keep visible.
+    const headCount = Math.min(HEAD_SLOTS, Math.max(0, buffer - TAIL_SLOTS));
+    const tailStart = Math.max(headCount, buffer - TAIL_SLOTS);
 
-    // 1. First 6 messages (indices 0 to 5)
-    for (let i = 0; i < 6; i++) {
+    const slots: ConveyorSlotItem[] = [];
+    for (let i = 0; i < headCount; i++) {
       slots.push({ type: 'message', message: messages[i], index: i });
     }
 
-    // 2. Ellipsis slot for all remaining intermediate messages
-    slots.push({
-      type: 'ellipsis',
-      fromIndex: 6,
-      toIndex: total - 3,
-      count: total - 8,
-    });
+    // Single overflow chip: every message not shown, including the ones that
+    // have not been peeked yet.
+    const overflow = Math.max(0, totalMessages - headCount - (buffer - tailStart));
+    if (overflow > 0) {
+      slots.push({
+        type: 'ellipsis',
+        fromIndex: headCount,
+        toIndex: Math.max(headCount, tailStart - 1),
+        count: overflow,
+      });
+    }
 
-    // 3. Final 2 messages (indices total - 2 and total - 1)
-    slots.push({ type: 'message', message: messages[total - 2], index: total - 2 });
-    slots.push({ type: 'message', message: messages[total - 1], index: total - 1 });
+    // Final messages of the queue (the last peeked slots).
+    for (let i = tailStart; i < buffer; i++) {
+      slots.push({ type: 'message', message: messages[i], index: i });
+    }
 
     return slots;
   };
@@ -115,7 +133,7 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
           <Layers className="size-4" style={{ color: accentColor }} />
           <span>Real Queue — Architecture Conveyor</span>
           <span className="hw-tag border-zinc-800 text-zinc-400 bg-zinc-900/80 font-normal">
-            FIFO: #1 Head → #{messages.length} Tail
+            FIFO: #1 Head → #{totalMessages} Tail
           </span>
         </div>
 
@@ -173,12 +191,12 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                 <ArrowRight className={`size-4 ${publishRate > 0 ? 'text-matrix-info animate-pulse' : ''}`} />
               </div>
 
-              {/* 2. Real Queue Pipeline with 6 messages ... 2 final messages */}
+              {/* 2. Real Queue Pipeline: head slots → single overflow chip → tail slots */}
               <div className="flex items-center gap-2 p-2.5 bg-[#08090d] border border-zinc-800 rounded-none relative">
                 {/* Pipeline Flow Label */}
               <div className="absolute -top-4 left-3 font-mono text-[9px] uppercase tracking-wider text-zinc-400 flex items-center gap-1.5 font-bold">
                 <span className="size-1.5 rounded-full" style={{ backgroundColor: accentColor }}></span>
-                <span>Queue Pipeline (FIFO: #1 Head → #6 ... #Tail)</span>
+                <span>Queue Pipeline (FIFO: #1 Head → #{totalMessages} Tail)</span>
               </div>
 
                 {slots.map((item, slotIdx) => {
@@ -209,7 +227,11 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                         <button
                           type="button"
                           onClick={() =>
-                            onOpenModal(isIntermediateSelected ? selectedIndex : item.fromIndex)
+                            onOpenModal(
+                              isIntermediateSelected
+                                ? selectedIndex
+                                : Math.min(item.fromIndex, Math.max(0, messages.length - 1))
+                            )
                           }
                           className={`shrink-0 flex flex-col items-center justify-between p-1.5 w-16 h-20 bg-[#080a10] border border-dashed transition-all cursor-pointer font-mono group ${
                             isIntermediateSelected
@@ -219,7 +241,7 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                           style={{
                             borderColor: isIntermediateSelected ? accentColor : undefined,
                           }}
-                          title={`Click to view the ${item.count} intermediate messages (#${item.fromIndex + 1} to #${item.toIndex + 1})`}
+                          title={`${item.count} message${item.count === 1 ? '' : 's'} collapsed between the head and the tail — click to inspect the peeked ones`}
                         >
                           <span className="text-zinc-400 group-hover:text-white font-bold tracking-widest text-xs">
                             ···
@@ -325,15 +347,6 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                     </div>
                   );
                 })}
-
-                {/* Not-peeked tail indicator */}
-                {notPeeked > 0 && (
-                  <div className="shrink-0 flex flex-col items-center justify-center px-3 h-20 border border-dashed border-zinc-700 bg-[#08090d] text-center">
-                    <span className="font-mono text-[9px] uppercase tracking-wider text-zinc-500">Tail Queue</span>
-                    <span className="font-mono text-xs font-bold text-zinc-300">+{notPeeked}</span>
-                    <span className="font-mono text-[8px] text-zinc-600">in broker</span>
-                  </div>
-                )}
               </div>
 
               {/* Delivery Arrow */}

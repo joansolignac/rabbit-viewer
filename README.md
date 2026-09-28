@@ -11,7 +11,7 @@
 
 <p align="center">
   <img alt="License: MIT" src="https://img.shields.io/badge/License-MIT-yellow.svg" />
-  <img alt="Node.js >= 18" src="https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg" />
+  <img alt="Node.js >= 20.19" src="https://img.shields.io/badge/node-%3E%3D20.19-brightgreen.svg" />
   <img alt="RabbitMQ" src="https://img.shields.io/badge/RabbitMQ-3.x-ea580c.svg" />
   <img alt="PRs welcome" src="https://img.shields.io/badge/PRs-welcome-blue.svg" />
 </p>
@@ -73,7 +73,10 @@ as per-request headers to the local proxy.
    - Pulsing alert badge: `[ ⚠ STUCK: NO ACTIVE CONSUMERS ]`.
    - Quick filter to isolate queues with orphaned messages at a glance.
 3. **FIFO pipeline message viewer**
-   - Queue rendered as an assembly line: `[ #1 HEAD OF QUEUE ] → [ #2 ] → [ #3 ]`.
+   - Queue rendered as an assembly line: up to **5 head slots**, a single collapsed **`+N` overflow chip**, then
+     the **last 2 messages** — e.g. `#1 #2 #3 #4 #5 [+14] #20 #21` for a 21-message queue. The `+N` chip absorbs
+     everything that is not rendered, including messages that have not been peeked yet, so there is never a second
+     overflow counter on screen.
    - Per-message payload with JSON syntax highlighting, raw/formatted toggle, and one-click copy.
    - Redelivery indicator: `[ ⚠ REDELIVERED ]`.
    - Routing key, exchange, delivery mode, byte size, `correlation_id`, and `reply_to` (invaluable for debugging
@@ -125,7 +128,8 @@ There is **no database** and **no server-side auth/session state**. Every reques
 
 Before you start, make sure you have:
 
-- **Node.js 18 or newer** (verified with Node.js 24) and **npm** (bundled with Node.js).
+- **Node.js 20.19+ or 22.12+** (an LTS release is recommended; verified with Node.js 24) and **npm** (bundled
+  with Node.js).
 - **A RabbitMQ broker** with the **Management plugin** enabled, reachable from the machine running the backend.
   The Management API listens on port **15672** by default.
 - (Optional) **Docker**, if you want to spin up a throwaway RabbitMQ broker for testing.
@@ -137,10 +141,11 @@ Before you start, make sure you have:
 
 ### 1. Install Node.js
 
-Install Node.js 18+ from <https://nodejs.org/> (LTS is recommended). Verify the installation:
+Install Node.js 20.19+ (or 22.12+) from <https://nodejs.org/> — an LTS release is recommended. Verify the
+installation:
 
 ```bash
-node --version   # should print v18.x or newer, e.g. v24.x
+node --version   # should print v20.19.x, v22.12.x or newer, e.g. v24.x
 npm --version    # should print the bundled npm version
 ```
 
