@@ -42,9 +42,9 @@ export const QueueDetail: React.FC<QueueDetailProps> = ({
   const [loadingQueue, setLoadingQueue] = useState(false);
   const [loadingMessages, setLoadingMessages] = useState(false);
   // Default to the maximum peek so the conveyor always covers the whole ready
-  // backlog instead of only the first 10 messages. The broker returns at most
-  // as many messages as the queue actually holds, so this shows the real queue.
-  const MAX_PEEK_COUNT = 100;
+  // backlog instead of only the first messages. The broker returns at most as
+  // many messages as the queue actually holds, so this shows the real queue.
+  const MAX_PEEK_COUNT = 500;
   const [peekCount, setPeekCount] = useState(MAX_PEEK_COUNT);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successNotice, setSuccessNotice] = useState<string | null>(null);
@@ -339,7 +339,9 @@ export const QueueDetail: React.FC<QueueDetailProps> = ({
               <option value={10}>10 msgs</option>
               <option value={20}>20 msgs</option>
               <option value={50}>50 msgs</option>
-              <option value={100}>All (max 100)</option>
+              <option value={100}>100 msgs</option>
+              <option value={200}>200 msgs</option>
+              <option value={500}>All (max 500)</option>
             </select>
           </div>
 

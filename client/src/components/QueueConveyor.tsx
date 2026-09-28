@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import type { QueueItem, QueueMessage } from '../types/rabbitmq';
 import {
   AlertTriangle,
@@ -32,7 +32,6 @@ function formatRate(value?: number): string {
 
 type ConveyorSlotItem =
   | { type: 'message'; message: QueueMessage; index: number }
-  | { type: 'ellipsis'; fromIndex: number; toIndex: number; count: number }
   | { type: 'placeholder'; index: number };
 
 export const QueueConveyor: React.FC<QueueConveyorProps> = ({
@@ -79,60 +78,56 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
     );
   };
 
-  // Conveyor layout: HEAD of the queue, a single collapsed overflow chip, then
-  // the final messages. The overflow chip absorbs every message that is not
-  // rendered — both collapsed peeked messages and messages still waiting in the
-  // broker — so there is only ever one overflow counter on screen. The two tail
-  // slots always represent the REAL end of the queue: when the whole backlog
-  // has not been peeked (peek cap), they render as placeholders instead of
-  // pretending the last peeked message is the tail.
-  const HEAD_SLOTS = 5;
-  const TAIL_SLOTS = 2;
-  const COLLAPSE_THRESHOLD = HEAD_SLOTS + TAIL_SLOTS + 1;
+  // Paginated pipeline: PAGE_SIZE messages are shown per page, with a trailing
+  // "+N" chip that jumps to the next batch. The two tail slots of the queue are
+  // preserved as placeholders when the head-only peek window does not reach them.
+  const PAGE_SIZE = 6;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(totalMessages / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageEnd = Math.min(pageStart + PAGE_SIZE, totalMessages);
 
-  const buildSlots = (): ConveyorSlotItem[] => {
-    const buffer = messages.length;
-    const tailLoaded = buffer >= totalMessages;
+  // New queue or new peek: go back to the first page.
+  useEffect(() => {
+    setPage(1);
+  }, [queue.name, messages.length]);
 
-    // Queue is short enough to render every peeked message: nothing to collapse.
-    if (tailLoaded && totalMessages <= COLLAPSE_THRESHOLD) {
-      return messages.map((m, i) => ({ type: 'message', message: m, index: i }));
-    }
+  // Keep the current page in range as the queue grows or shrinks.
+  useEffect(() => {
+    setPage((value) => Math.min(value, pageCount));
+  }, [pageCount]);
 
-    // Show at most HEAD_SLOTS from the head and never overlap the real tail.
-    const headCount = Math.min(HEAD_SLOTS, Math.max(0, tailLoaded ? totalMessages - TAIL_SLOTS : buffer));
+  // Follow the selected message onto its page (e.g. when stepping in the modal).
+  useEffect(() => {
+    if (selectedIndex === null) return;
+    const target = Math.floor(selectedIndex / PAGE_SIZE) + 1;
+    setPage((value) => (value === target ? value : target));
+  }, [selectedIndex]);
 
-    const slots: ConveyorSlotItem[] = [];
-    for (let i = 0; i < headCount; i++) {
+  const slots: ConveyorSlotItem[] = [];
+  for (let i = pageStart; i < pageEnd; i++) {
+    if (i < messages.length) {
       slots.push({ type: 'message', message: messages[i], index: i });
+    } else {
+      slots.push({ type: 'placeholder', index: i });
     }
+  }
 
-    // Single overflow chip: every message not shown, including the ones that
-    // have not been peeked yet.
-    const overflow = Math.max(0, totalMessages - headCount - TAIL_SLOTS);
-    if (overflow > 0) {
-      slots.push({
-        type: 'ellipsis',
-        fromIndex: headCount,
-        toIndex: Math.max(headCount, (tailLoaded ? totalMessages : buffer) - TAIL_SLOTS - 1),
-        count: overflow,
-      });
-    }
+  const remaining = Math.max(0, totalMessages - pageEnd);
 
-    // Real tail of the queue (absolute positions totalMessages - 2 and - 1).
-    const tailStart = totalMessages - TAIL_SLOTS;
-    for (let i = Math.max(0, tailStart); i < totalMessages; i++) {
-      if (i < buffer) {
-        slots.push({ type: 'message', message: messages[i], index: i });
-      } else {
-        slots.push({ type: 'placeholder', index: i });
-      }
-    }
-
-    return slots;
-  };
-
-  const slots = buildSlots();
+  // Compact page number list, e.g. 1 … 4 5 6 … 12
+  const pageItems: (number | 'ellipsis')[] = (() => {
+    if (pageCount <= 7) return Array.from({ length: pageCount }, (_, i) => i + 1);
+    const items: (number | 'ellipsis')[] = [1];
+    const from = Math.max(2, currentPage - 1);
+    const to = Math.min(pageCount - 1, currentPage + 1);
+    if (from > 2) items.push('ellipsis');
+    for (let p = from; p <= to; p++) items.push(p);
+    if (to < pageCount - 1) items.push('ellipsis');
+    items.push(pageCount);
+    return items;
+  })();
 
   return (
     <div className="p-5 bg-[#0e1017] border border-[#232838] space-y-4 font-mono">
@@ -182,6 +177,83 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Pagination Bar */}
+          {pageCount > 1 && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1">
+              <span className="text-[10px] uppercase tracking-wider text-zinc-500">
+                Showing <span className="text-zinc-300 font-bold">#{pageStart + 1}–#{pageEnd}</span> of{' '}
+                <span className="text-zinc-300 font-bold">#{totalMessages}</span>
+                <span className="text-zinc-600"> · page {currentPage}/{pageCount}</span>
+              </span>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage(1)}
+                  disabled={currentPage === 1}
+                  className="hw-btn-secondary !px-2 !py-0.5 !text-[10px] disabled:opacity-30"
+                  title="First page"
+                >
+                  «
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                  className="hw-btn-secondary !px-2 !py-0.5 !text-[10px] disabled:opacity-30 flex items-center"
+                  title="Previous page"
+                >
+                  <ChevronLeft className="size-3" />
+                </button>
+
+                {pageItems.map((item, idx) =>
+                  item === 'ellipsis' ? (
+                    <span key={`gap-${idx}`} className="px-1 text-zinc-600 text-[10px]">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setPage(item)}
+                      className={`min-w-[24px] px-1.5 py-0.5 text-[10px] font-mono border transition-colors ${
+                        item === currentPage
+                          ? 'text-black font-bold'
+                          : 'text-zinc-300 border-zinc-700 hover:border-zinc-400 hover:text-white'
+                      }`}
+                      style={
+                        item === currentPage
+                          ? { backgroundColor: accentColor, borderColor: accentColor }
+                          : undefined
+                      }
+                    >
+                      {item}
+                    </button>
+                  )
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                  disabled={currentPage === pageCount}
+                  className="hw-btn-secondary !px-2 !py-0.5 !text-[10px] disabled:opacity-30 flex items-center"
+                  title="Next page"
+                >
+                  <ChevronRight className="size-3" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage(pageCount)}
+                  disabled={currentPage === pageCount}
+                  className="hw-btn-secondary !px-2 !py-0.5 !text-[10px] disabled:opacity-30"
+                  title="Last page"
+                >
+                  »
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Architecture Conveyor Belt Flow */}
           <div className="overflow-x-auto pb-2">
             <div className="flex items-center gap-3 min-w-max pt-6 pb-4 px-2">
@@ -208,72 +280,7 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                 <span>Queue Pipeline (FIFO: #1 Head → #{totalMessages} Tail)</span>
               </div>
 
-                {slots.map((item, slotIdx) => {
-                  if (item.type === 'ellipsis') {
-                    const isIntermediateSelected =
-                      selectedIndex !== null &&
-                      selectedIndex >= item.fromIndex &&
-                      selectedIndex <= item.toIndex;
-
-                    return (
-                      <div key={`ellipsis-${slotIdx}`} className="flex flex-col items-center relative">
-                        {/* Active Beacon if selected message is in the ellipsis range */}
-                        {isIntermediateSelected && (
-                          <div className="absolute -top-5 flex flex-col items-center animate-bounce z-10">
-                            <span
-                              className="font-mono text-[8px] font-bold uppercase px-1 rounded-sm text-black"
-                              style={{ backgroundColor: accentColor }}
-                            >
-                              #{selectedIndex + 1}
-                            </span>
-                            <span
-                              className="w-0 h-0 border-l-[3px] border-l-transparent border-r-[3px] border-r-transparent border-t-[4px]"
-                              style={{ borderTopColor: accentColor }}
-                            ></span>
-                          </div>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onOpenModal(
-                              isIntermediateSelected
-                                ? selectedIndex
-                                : Math.min(item.fromIndex, Math.max(0, messages.length - 1))
-                            )
-                          }
-                          className={`shrink-0 flex flex-col items-center justify-between p-1.5 w-16 h-20 bg-[#080a10] border border-dashed transition-all cursor-pointer font-mono group ${
-                            isIntermediateSelected
-                              ? 'border-white bg-[#121520] scale-105 z-10 shadow-lg'
-                              : 'border-zinc-700/80 hover:border-zinc-400 hover:bg-[#0f121a]'
-                          }`}
-                          style={{
-                            borderColor: isIntermediateSelected ? accentColor : undefined,
-                          }}
-                          title={`${item.count} message${item.count === 1 ? '' : 's'} collapsed between the head and the tail — click to inspect the peeked ones`}
-                        >
-                          <span className="text-zinc-400 group-hover:text-white font-bold tracking-widest text-xs">
-                            ···
-                          </span>
-                          <div className="flex flex-col items-center">
-                            <span className="text-zinc-300 group-hover:text-white font-bold text-[11px]">
-                              +{item.count}
-                            </span>
-                            <span className="text-[8px] text-zinc-500 uppercase tracking-tight">
-                              msgs
-                            </span>
-                          </div>
-                          <span
-                            className="text-[8px] uppercase tracking-wider font-semibold group-hover:underline"
-                            style={{ color: accentColor }}
-                          >
-                            VIEW MORE ↗
-                          </span>
-                        </button>
-                      </div>
-                    );
-                  }
-
+                {slots.map((item) => {
                   if (item.type === 'placeholder') {
                     const { index } = item;
                     const isTail = index === totalMessages - 1;
@@ -382,6 +389,28 @@ export const QueueConveyor: React.FC<QueueConveyorProps> = ({
                     </div>
                   );
                 })}
+
+                {/* Remaining messages past this page: jump to the next batch */}
+                {remaining > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                    className="shrink-0 flex flex-col items-center justify-between p-1.5 w-16 h-20 bg-[#080a10] border border-dashed border-zinc-700/80 hover:border-zinc-400 hover:bg-[#0f121a] transition-all cursor-pointer font-mono group"
+                    title={`${remaining} more message${remaining === 1 ? '' : 's'} — go to the next page`}
+                  >
+                    <span className="text-zinc-400 group-hover:text-white font-bold tracking-widest text-xs">···</span>
+                    <div className="flex flex-col items-center">
+                      <span className="text-zinc-300 group-hover:text-white font-bold text-[11px]">+{remaining}</span>
+                      <span className="text-[8px] text-zinc-500 uppercase tracking-tight">msgs</span>
+                    </div>
+                    <span
+                      className="text-[8px] uppercase tracking-wider font-semibold group-hover:underline"
+                      style={{ color: accentColor }}
+                    >
+                      NEXT ↗
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* Delivery Arrow */}

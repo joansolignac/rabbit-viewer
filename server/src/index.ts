@@ -199,7 +199,9 @@ app.post('/api/queues/:vhost/:queue/messages', requireBrokerConfig, async (req: 
   const encodedVhost = encodeVhost(vhost);
   const encodedQueue = encodeURIComponent(queue);
 
-  const count = Math.min(Math.max(parseInt(req.body.count || '10', 10), 1), 100);
+  // Cap the peek to 500 messages: large enough to cover most stuck queues while
+  // keeping the proxy response bounded.
+  const count = Math.min(Math.max(parseInt(req.body.count || '10', 10), 1), 500);
   const ackmode = req.body.ackmode === 'ack_requeue_false' ? 'ack_requeue_false' : 'ack_requeue_true';
 
   const rabbitPayload = {

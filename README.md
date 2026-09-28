@@ -72,14 +72,13 @@ as per-request headers to the local proxy.
      (`consumers === 0`).
    - Pulsing alert badge: `[ ⚠ STUCK: NO ACTIVE CONSUMERS ]`.
    - Quick filter to isolate queues with orphaned messages at a glance.
-3. **FIFO pipeline message viewer**
-   - Queue rendered as an assembly line: up to **5 head slots**, a single collapsed **`+N` overflow chip**, then
-     the **last 2 messages** — e.g. `#1 #2 #3 #4 #5 [+14] #20 #21` for a 21-message queue. The `+N` chip absorbs
-     everything that is not rendered, including messages that have not been peeked yet, so there is never a second
-     overflow counter on screen.
-   - The two tail slots always use the **real queue positions**: when the backlog exceeds the loaded peek window
-     they render as placeholders (e.g. `#197 #198`) instead of pretending the last peeked message is the tail. The
-     RabbitMQ Management API only peeks from the head, so an unpeeked tail cannot be inspected non-destructively.
+3. **Paginated FIFO pipeline viewer**
+   - The queue is rendered as an assembly line in **pages of 6 messages** (`#1…#6`, `#7…#12`, …) with a compact
+     pagination control (first / prev / numbered pages / next / last) and a `Showing #A–#B of #N` indicator.
+   - Each page ends with a **`+N` chip** that jumps to the next batch, so you can walk the whole backlog.
+   - Messages that have not been peeked yet (the Management API only peeks from the **head**, capped at **500** per
+     request) still appear as **placeholders at their real queue positions**, so the numbering and the tail always
+     match the real queue.
    - Per-message payload with JSON syntax highlighting, raw/formatted toggle, and one-click copy.
    - Redelivery indicator: `[ ⚠ REDELIVERED ]`.
    - Routing key, exchange, delivery mode, byte size, `correlation_id`, and `reply_to` (invaluable for debugging
@@ -87,8 +86,9 @@ as per-request headers to the local proxy.
    - Expandable table of custom headers.
 4. **Safe and destructive operations behind confirmation**
    - **Peek messages** using `ackmode: "ack_requeue_true"` to inspect exact contents **without consuming them**.
-     By default the whole ready backlog is peeked (up to 100 messages), so the conveyor reflects the real queue
-     instead of only the first 10 messages. The peek count can be lowered or raised from the **Peek Count** selector.
+     By default the whole ready backlog is peeked (up to **500** messages), so the conveyor reflects the real queue
+     instead of only the first 10 messages. The peek count can be lowered or raised from the **Peek Count** selector
+     (5 / 10 / 20 / 50 / 100 / 200 / 500).
    - **Ack / drop head message** to consume and delete the front message after explicit confirmation.
    - **Purge entire queue** behind a typed `PURGE` confirmation.
 5. **Configurable auto-refresh**
