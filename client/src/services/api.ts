@@ -1,4 +1,4 @@
-import type { ConnectionProfile, OverviewData, QueueItem, QueueMessage, VhostItem } from '../types/rabbitmq';
+import type { ConnectionProfile, OverviewData, QueueHistoryParams, QueueItem, QueueMessage, VhostItem } from '../types/rabbitmq';
 
 const API_BASE = '/api';
 
@@ -74,10 +74,27 @@ export async function getQueues(profile: ConnectionProfile, vhost?: string): Pro
   return handleResponse<QueueItem[]>(res);
 }
 
-export async function getQueueDetail(profile: ConnectionProfile, vhost: string, queue: string): Promise<QueueItem> {
+export async function getQueueDetail(
+  profile: ConnectionProfile,
+  vhost: string,
+  queue: string,
+  history?: QueueHistoryParams
+): Promise<QueueItem> {
   const encVhost = encodeURIComponent(vhost);
   const encQueue = encodeURIComponent(queue);
-  const res = await fetch(`${API_BASE}/queues/${encVhost}/${encQueue}`, {
+  let url = `${API_BASE}/queues/${encVhost}/${encQueue}`;
+
+  if (history) {
+    const queryString = new URLSearchParams({
+      lengths_age: String(history.lengths_age),
+      lengths_incr: String(history.lengths_incr),
+      msg_rates_age: String(history.msg_rates_age),
+      msg_rates_incr: String(history.msg_rates_incr),
+    }).toString();
+    url = `${url}?${queryString}`;
+  }
+
+  const res = await fetch(url, {
     headers: buildHeaders(profile),
   });
   return handleResponse<QueueItem>(res);

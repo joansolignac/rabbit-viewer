@@ -43,12 +43,20 @@ export async function forwardToRabbitMQ(
     method?: string;
     body?: any;
     timeoutMs?: number;
+    query?: Record<string, string | number>;
   } = {}
 ): Promise<{ status: number; data: any; ok: boolean }> {
-  const { method = 'GET', body, timeoutMs = 8000 } = options;
+  const { method = 'GET', body, timeoutMs = 8000, query } = options;
 
   const cleanPath = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-  const targetUrl = `${config.protocol}://${config.host}:${config.port}/api${cleanPath}`;
+  let targetUrl = `${config.protocol}://${config.host}:${config.port}/api${cleanPath}`;
+
+  if (query && Object.keys(query).length > 0) {
+    const queryString = new URLSearchParams(
+      Object.entries(query).map(([key, value]) => [key, String(value)])
+    ).toString();
+    targetUrl = `${targetUrl}?${queryString}`;
+  }
 
   const authString = Buffer.from(`${config.user}:${config.password ?? ''}`).toString('base64');
 

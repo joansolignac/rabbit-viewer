@@ -2,3 +2,4 @@ node_modules/
 dist/
 .env
 graphify-out/
+.claude/scheduled_tasks.lock

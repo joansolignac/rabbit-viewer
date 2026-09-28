@@ -140,7 +140,7 @@ export const JsonViewer: React.FC<JsonViewerProps> = ({ data, maxHeight = 'max-h
       </div>
 
       {/* Code Area */}
-      <div className={`p-3 overflow-auto ${maxHeight} selection:bg-brand-500 selection:text-black font-mono`}>
+      <div className={`p-3 overflow-auto ${maxHeight} selection:bg-white selection:text-black font-mono`}>
         {isRaw || !isJson ? (
           <pre className="font-mono text-[11px] text-zinc-200 whitespace-pre-wrap break-all leading-5">
             {formattedString}

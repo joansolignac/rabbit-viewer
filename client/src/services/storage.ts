@@ -19,17 +19,17 @@ const DEFAULT_PROFILE: ConnectionProfile = {
 export function getProfiles(): ConnectionProfile[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      // Seed with default local instance
+    if (raw === null) {
+      // First visit: Seed with default local instance
       localStorage.setItem(STORAGE_KEY, JSON.stringify([DEFAULT_PROFILE]));
       localStorage.setItem(ACTIVE_KEY, DEFAULT_PROFILE.id);
       return [DEFAULT_PROFILE];
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [DEFAULT_PROFILE];
+    return Array.isArray(parsed) ? parsed : [];
   } catch (err) {
     console.error('Failed to read profiles from localStorage', err);
-    return [DEFAULT_PROFILE];
+    return [];
   }
 }
 
@@ -44,7 +44,11 @@ export function getActiveProfileId(): string | null {
   return profiles.length > 0 ? profiles[0].id : null;
 }
 
-export function setActiveProfileId(id: string): void {
+export function setActiveProfileId(id: string | null): void {
+  if (!id) {
+    localStorage.removeItem(ACTIVE_KEY);
+    return;
+  }
   localStorage.setItem(ACTIVE_KEY, id);
   // Update lastUsedAt
   const profiles = getProfiles().map(p => p.id === id ? { ...p, lastUsedAt: Date.now() } : p);
@@ -53,6 +57,7 @@ export function setActiveProfileId(id: string): void {
 
 export function getActiveProfile(): ConnectionProfile | null {
   const profiles = getProfiles();
+  if (profiles.length === 0) return null;
   const activeId = getActiveProfileId();
   return profiles.find(p => p.id === activeId) || profiles[0] || null;
 }
@@ -69,14 +74,14 @@ export function upsertProfile(profile: ConnectionProfile): void {
 }
 
 export function deleteProfile(id: string): void {
-  let profiles = getProfiles().filter(p => p.id !== id);
-  if (profiles.length === 0) {
-    // Keep at least default if all deleted
-    profiles = [DEFAULT_PROFILE];
-  }
+  const profiles = getProfiles().filter(p => p.id !== id);
   saveProfiles(profiles);
   const activeId = getActiveProfileId();
   if (activeId === id) {
-    setActiveProfileId(profiles[0].id);
+    if (profiles.length > 0) {
+      setActiveProfileId(profiles[0].id);
+    } else {
+      setActiveProfileId(null);
+    }
   }
 }

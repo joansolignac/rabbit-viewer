@@ -163,7 +163,7 @@ export const QueuesList: React.FC<QueuesListProps> = ({
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search queue name..."
-              className="w-full pl-9 pr-3 py-1.5 bg-[#06070a] border border-zinc-700 font-mono text-xs text-zinc-100 focus:outline-none focus:border-brand-500"
+              className="w-full pl-9 pr-3 py-1.5 bg-[#06070a] border border-zinc-700 font-mono text-xs text-zinc-100 focus:outline-none focus:border-white"
             />
           </div>
 
@@ -238,7 +238,7 @@ export const QueuesList: React.FC<QueuesListProps> = ({
             className="hw-btn-secondary !py-1 !px-2.5"
             title="Refresh queue list"
           >
-            <RefreshCw className={`size-3 ${isLoading ? 'animate-spin text-brand-500' : ''}`} />
+            <RefreshCw className={`size-3 ${isLoading ? 'animate-spin text-white' : ''}`} />
             <span>Refresh</span>
           </button>
         </div>
@@ -298,7 +298,7 @@ export const QueuesList: React.FC<QueuesListProps> = ({
                       {isStuck && (
                         <span className="hw-tag border-rose-500/80 bg-rose-950/80 text-rose-300 font-bold flex items-center gap-1 animate-pulse-fast">
                           <AlertTriangle className="size-3 text-rose-400" />
-                          ⚠️ STUCK: NO ACTIVE CONSUMERS
+                          STUCK: NO ACTIVE CONSUMERS
                         </span>
                       )}
 

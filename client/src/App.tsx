@@ -17,6 +17,7 @@ import {
   AlertCircle,
   RefreshCw,
   Zap,
+  Plus,
 } from 'lucide-react';
 
 export const App: React.FC = () => {
@@ -47,8 +48,8 @@ export const App: React.FC = () => {
   // Auto-refresh interval (seconds)
   const [autoRefreshInterval, setAutoRefreshInterval] = useState(5);
 
-  // Theme Accent Color (Hermes-inspired, custom high-contrast orange default)
-  const [accentColor, setAccentColor] = useState<string>('#ff5500');
+  // Theme Accent Color (Minimalist white/monochrome default)
+  const [accentColor, setAccentColor] = useState<string>('#ffffff');
 
   // Load profiles on mount
   useEffect(() => {
@@ -141,6 +142,13 @@ export const App: React.FC = () => {
     setProfiles(updated);
     const active = getActiveProfile();
     setActiveProfile(active);
+    setActiveProfileId(active?.id ?? null);
+    if (!active) {
+      setIsConnected(false);
+      setQueues([]);
+      setSelectedQueueName(null);
+      setConnectionError(null);
+    }
   };
 
   const handleChangeVhost = (vh: string) => {
@@ -163,13 +171,14 @@ export const App: React.FC = () => {
   }, [autoRefreshInterval, isConnected, activeProfile, currentVhost, selectedQueueName]);
 
   return (
-    <div className="min-h-screen bg-[#08090d] text-zinc-100 flex flex-col font-sans selection:bg-[#ff5500] selection:text-black">
+    <div className="min-h-screen bg-[#08090d] text-zinc-100 flex flex-col font-sans selection:bg-white selection:text-black">
       {/* Top Navbar */}
       <Navbar
         activeProfile={activeProfile}
         profiles={profiles}
         onSelectProfile={handleSelectProfile}
         onOpenConnectionModal={() => setIsConnectionModalOpen(true)}
+        onDeleteProfile={handleDeleteProfile}
         isConnected={isConnected}
         isConnecting={isConnecting}
         vhosts={vhosts}
@@ -223,8 +232,8 @@ export const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Quick Profile Summary */}
-              {activeProfile && (
+              {/* Quick Profile Summary or Empty State */}
+              {activeProfile ? (
                 <div className="mt-6 p-4 bg-[#07080c] border border-zinc-800 font-mono text-xs space-y-2">
                   <div className="flex items-center justify-between text-zinc-400">
                     <span className="uppercase text-[10px]">Active Profile:</span>
@@ -243,6 +252,14 @@ export const App: React.FC = () => {
                     <span className="text-zinc-200">{activeProfile.vhost}</span>
                   </div>
                 </div>
+              ) : (
+                <div className="mt-6 p-6 bg-[#07080c] border border-dashed border-zinc-800 text-center font-mono space-y-2">
+                  <Server className="size-8 mx-auto text-zinc-600" />
+                  <div className="text-zinc-300 text-xs font-bold uppercase tracking-wider">No Broker Host Configured</div>
+                  <p className="text-[11px] text-zinc-500 max-w-sm mx-auto">
+                    All connection profiles have been deleted. Add a RabbitMQ host to start inspecting queues.
+                  </p>
+                </div>
               )}
 
               {/* Actions */}
@@ -252,25 +269,36 @@ export const App: React.FC = () => {
                   onClick={() => setIsConnectionModalOpen(true)}
                   className="w-full sm:w-auto hw-btn-secondary"
                 >
-                  Edit / Switch Brokers
+                  {activeProfile ? 'Edit / Switch Brokers' : 'Manage Brokers'}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => activeProfile && verifyAndConnect(activeProfile)}
-                  disabled={isConnecting}
-                  className="w-full sm:w-auto hw-btn-primary"
-                >
-                  <Zap className="size-4" />
-                  <span>Retry Connection</span>
-                </button>
+                {activeProfile ? (
+                  <button
+                    type="button"
+                    onClick={() => verifyAndConnect(activeProfile)}
+                    disabled={isConnecting}
+                    className="w-full sm:w-auto hw-btn-primary"
+                  >
+                    <Zap className="size-4" />
+                    <span>Retry Connection</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsConnectionModalOpen(true)}
+                    className="w-full sm:w-auto hw-btn-primary"
+                  >
+                    <Plus className="size-4" />
+                    <span>+ Add New Host</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>
         ) : isConnecting ? (
           /* Connecting Loading Screen */
           <div className="py-24 text-center font-mono">
-            <RefreshCw className="size-8 mx-auto text-brand-500 animate-spin mb-4" />
+            <RefreshCw className="size-8 mx-auto text-white animate-spin mb-4" />
             <h3 className="text-zinc-200 text-sm font-semibold uppercase tracking-wider">
               Connecting to RabbitMQ Broker...
             </h3>

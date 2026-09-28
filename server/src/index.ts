@@ -37,6 +37,72 @@ const requireBrokerConfig = (req: Request, res: Response, next: NextFunction) =>
   }
 };
 
+// Allowlisted RabbitMQ history query parameter pairs: [age, incr]
+const HISTORY_PARAM_PAIRS = [
+  ['lengths_age', 'lengths_incr'],
+  ['msg_rates_age', 'msg_rates_incr'],
+] as const;
+
+const HISTORY_MIN_INCR_S = 5;
+const HISTORY_MAX_INCR_S = 3600;
+const HISTORY_MAX_AGE_S = 3600;
+const HISTORY_MAX_SAMPLES = 200;
+
+/**
+ * Validates and normalizes the allowlisted RabbitMQ history query params.
+ * Returns undefined when no pair is provided (preserving the plain route behavior),
+ * or a numeric map ready to forward to the broker. Throws on any violation.
+ */
+function parseHistoryQuery(query: Request['query']): Record<string, number> | undefined {
+  const result: Record<string, number> = {};
+  let providedAny = false;
+
+  for (const [ageKey, incrKey] of HISTORY_PARAM_PAIRS) {
+    const rawAge = query[ageKey];
+    const rawIncr = query[incrKey];
+    const hasAge = rawAge !== undefined;
+    const hasIncr = rawIncr !== undefined;
+
+    // Ignore unrelated keys entirely; skip pairs that were not requested.
+    if (!hasAge && !hasIncr) continue;
+
+    if (hasAge !== hasIncr) {
+      const present = hasAge ? ageKey : incrKey;
+      const missing = hasAge ? incrKey : ageKey;
+      throw new Error(`Invalid history params: ${present} requires ${missing}`);
+    }
+
+    // Reject arrays (?x=1&x=2) and non-numeric values.
+    if (typeof rawAge !== 'string' || !/^\d+$/.test(rawAge)) {
+      throw new Error(`Invalid history params: ${ageKey} must be a positive integer`);
+    }
+    if (typeof rawIncr !== 'string' || !/^\d+$/.test(rawIncr)) {
+      throw new Error(`Invalid history params: ${incrKey} must be a positive integer`);
+    }
+
+    const age = parseInt(rawAge, 10);
+    const incr = parseInt(rawIncr, 10);
+
+    if (incr < HISTORY_MIN_INCR_S || incr > HISTORY_MAX_INCR_S) {
+      throw new Error(`Invalid history params: ${incrKey} must be between ${HISTORY_MIN_INCR_S} and ${HISTORY_MAX_INCR_S}`);
+    }
+    if (age < incr || age > HISTORY_MAX_AGE_S) {
+      throw new Error(`Invalid history params: ${ageKey} must be between ${incr} and ${HISTORY_MAX_AGE_S}`);
+    }
+
+    const sampleCount = Math.floor(age / incr);
+    if (sampleCount > HISTORY_MAX_SAMPLES) {
+      throw new Error(`Invalid history params: too many samples (${sampleCount} > ${HISTORY_MAX_SAMPLES})`);
+    }
+
+    result[ageKey] = age;
+    result[incrKey] = incr;
+    providedAny = true;
+  }
+
+  return providedAny ? result : undefined;
+}
+
 /**
  * 1. Test Connection
  * Verifies credentials and reachability by querying /api/whoami and /api/overview
@@ -106,7 +172,18 @@ app.get('/api/queues/:vhost/:queue', requireBrokerConfig, async (req: Request, r
   const encodedVhost = encodeVhost(vhost);
   const encodedQueue = encodeURIComponent(queue);
 
-  const result = await forwardToRabbitMQ(config, `/queues/${encodedVhost}/${encodedQueue}`);
+  let history: Record<string, number> | undefined;
+  try {
+    history = parseHistoryQuery(req.query);
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
+
+  const result = await forwardToRabbitMQ(
+    config,
+    `/queues/${encodedVhost}/${encodedQueue}`,
+    history ? { query: history, timeoutMs: 10000 } : {}
+  );
   return res.status(result.status).json(result.data);
 });
 
